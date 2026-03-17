@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      // Base URL ajustada para o novo repositório no GitHub Pages
+      base: '/Dashboard-Kenyel/',
       server: {
         port: 3000,
         host: '0.0.0.0',
@@ -19,6 +21,12 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        // Direciona o build para a pasta docs
+        outDir: 'docs',
+        // Limpa a pasta docs antes de gerar novos arquivos
+        emptyOutDir: true,
       }
     };
 });
