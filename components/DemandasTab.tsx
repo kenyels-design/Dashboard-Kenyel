@@ -1,18 +1,17 @@
-
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, AlertCircle, Clock, CheckCircle, PauseCircle, Trash2, HelpCircle, Edit2, Check, X as CloseIcon, Maximize2 } from 'lucide-react';
-import { MOCK_DEMANDAS } from '../constants';
+import { Plus, Search, Filter, AlertCircle, Clock, CheckCircle, PauseCircle, Trash2, HelpCircle, Edit2, Check, X as CloseIcon, Maximize2, Loader2 } from 'lucide-react';
 import { StatusDemanda, Prioridade, Demanda } from '../types';
+// Importamos o cliente do Supabase que você criou
+import { supabase } from '../supabase';
 
 export const DemandasTab: React.FC = () => {
-  const [demandas, setDemandas] = useState<Demanda[]>(() => {
-    const saved = localStorage.getItem('cs_franquias_demandas');
-    return saved ? JSON.parse(saved) : MOCK_DEMANDAS;
-  });
+  // O estado agora começa vazio, sem ler do localStorage
+  const [demandas, setDemandas] = useState<Demanda[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const [filterText, setFilterText] = useState('');
   
-  // Filters State - Now additive (arrays)
+  // Filters State
   const [statusFilters, setStatusFilters] = useState<string[]>([]);
   const [priorityFilters, setPriorityFilters] = useState<string[]>([]);
   
@@ -29,10 +28,25 @@ export const DemandasTab: React.FC = () => {
   // View Modal State
   const [viewingText, setViewingText] = useState<{ title: string, content: string } | null>(null);
 
-  // Persistir alterações
+  // 1. LER DADOS DO SUPABASE QUANDO A TELA CARREGAR
   useEffect(() => {
-    localStorage.setItem('cs_franquias_demandas', JSON.stringify(demandas));
-  }, [demandas]);
+    fetchDemandas();
+  }, []);
+
+  const fetchDemandas = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('demandas')
+      .select('*')
+      .order('created_at', { ascending: false }); // Ordena pelas mais novas
+
+    if (error) {
+      console.error('Erro ao buscar demandas:', error);
+    } else {
+      setDemandas(data as Demanda[]);
+    }
+    setLoading(false);
+  };
 
   const getStatusIcon = (status: StatusDemanda) => {
     switch (status) {
@@ -53,41 +67,88 @@ export const DemandasTab: React.FC = () => {
     }
   };
 
-  const handleAdd = () => {
+  // 2. CRIAR NOVA DEMANDA NO SUPABASE
+  const handleAdd = async () => {
     if (!newWL || !newDescricao) return;
+    
     const novaDemanda = {
-        id: Math.random().toString(),
-        wl: newWL,
-        unidade: '', 
-        tipo: newTipo,
-        descricao: newDescricao,
-        responsavel: '', 
-        prazo: newPrazo,
-        status: StatusDemanda.NAO_INICIADA,
-        prioridade: Prioridade.MEDIA,
-        observacao: ''
+      wl: newWL,
+      unidade: '', 
+      tipo: newTipo,
+      descricao: newDescricao,
+      responsavel: '', 
+      prazo: newPrazo || null, // Supabase prefere null a string vazia para datas
+      status: StatusDemanda.NAO_INICIADA,
+      prioridade: Prioridade.MEDIA,
+      observacao: ''
     };
-    setDemandas([novaDemanda, ...demandas]);
-    setNewWL('');
-    setNewTipo('');
-    setNewPrazo('');
-    setNewDescricao('');
+
+    // Inserir no banco
+    const { error } = await supabase
+      .from('demandas')
+      .insert([novaDemanda]);
+
+    if (error) {
+      console.error('Erro ao adicionar demanda:', error);
+    } else {
+      setNewWL('');
+      setNewTipo('');
+      setNewPrazo('');
+      setNewDescricao('');
+      fetchDemandas(); // Recarregar lista
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setDemandas(demandas.filter(d => d.id !== id));
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase
+      .from('demandas')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao excluir demanda:', error);
+    } else {
+      fetchDemandas();
+    }
   };
 
-  const updateStatus = (id: string, newStatus: string) => {
-    setDemandas(demandas.map(d => d.id === id ? { ...d, status: newStatus as StatusDemanda } : d));
+  const updateStatus = async (id: string, newStatus: string) => {
+    const { error } = await supabase
+      .from('demandas')
+      .update({ status: newStatus as StatusDemanda })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar status:', error);
+    } else {
+      fetchDemandas();
+    }
   };
 
-  const updatePrioridade = (id: string, newPrioridade: string) => {
-    setDemandas(demandas.map(d => d.id === id ? { ...d, prioridade: newPrioridade as Prioridade } : d));
+  const updatePrioridade = async (id: string, newPrioridade: string) => {
+    const { error } = await supabase
+      .from('demandas')
+      .update({ prioridade: newPrioridade as Prioridade })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar prioridade:', error);
+    } else {
+      fetchDemandas();
+    }
   };
 
-  const updateObservacao = (id: string, newObs: string) => {
-    setDemandas(demandas.map(d => d.id === id ? { ...d, observacao: newObs } : d));
+  const updateObservacao = async (id: string, newObs: string) => {
+    const { error } = await supabase
+      .from('demandas')
+      .update({ observacao: newObs })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar observação:', error);
+    } else {
+      fetchDemandas();
+    }
   };
 
   const startEditing = (demanda: Demanda) => {
@@ -100,11 +161,20 @@ export const DemandasTab: React.FC = () => {
     setEditForm({});
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId) return;
-    setDemandas(demandas.map(d => d.id === editingId ? { ...d, ...editForm } as Demanda : d));
-    setEditingId(null);
-    setEditForm({});
+    const { error } = await supabase
+      .from('demandas')
+      .update(editForm)
+      .eq('id', editingId);
+
+    if (error) {
+      console.error('Erro ao salvar edição:', error);
+    } else {
+      setEditingId(null);
+      setEditForm({});
+      fetchDemandas();
+    }
   };
 
   const toggleStatusFilter = (status: string) => {
@@ -243,7 +313,12 @@ export const DemandasTab: React.FC = () => {
       </div>
 
       {/* Main Table */}
-      <div className="bg-panel border border-white/5 rounded-xl overflow-hidden">
+      <div className="bg-panel border border-white/5 rounded-xl overflow-hidden min-h-[300px] relative">
+        {loading && (
+          <div className="absolute inset-0 bg-panel/50 backdrop-blur-sm z-10 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-accent animate-spin" />
+          </div>
+        )}
         <div className="p-4 border-b border-white/5 flex justify-between items-center">
           <div>
             <h3 className="text-sm font-semibold text-white">Fila de demandas</h3>
@@ -439,6 +514,11 @@ export const DemandasTab: React.FC = () => {
               ))}
             </tbody>
           </table>
+          {filteredDemandas.length === 0 && !loading && (
+            <div className="p-12 text-center">
+              <p className="text-muted">Nenhuma demanda encontrada.</p>
+            </div>
+          )}
         </div>
       </div>
       {/* Text Viewer Modal */}
